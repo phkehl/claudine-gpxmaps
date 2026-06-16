@@ -181,32 +181,37 @@ func Run() error {
 		}()
 	})
 
-	// Add folder… adds every .gpx in a chosen directory at once (Fyne's file
-	// picker can't multi-select individual files).
-	addFolderBtn := widget.NewButton("Add folder…", func() {
+	// addFolderScan adds every .gpx directly inside dir. Must run on the UI
+	// goroutine (it touches widgets).
+	addFolderScan := func(dir string) {
+		lastDir = dir
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			dialog.ShowError(err, w)
+			return
+		}
+		var found []string
+		for _, e := range entries {
+			if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".gpx") {
+				found = append(found, filepath.Join(dir, e.Name()))
+			}
+		}
+		sort.Strings(found)
+		if addPaths(found...) == 0 {
+			dialog.ShowInformation("Add folder", "No new .gpx files found in "+dir, w)
+			return
+		}
+		refreshFiles()
+	}
+
+	// fyneAddFolder is the built-in folder picker, used when the native dialog
+	// is unavailable.
+	fyneAddFolder := func() {
 		d := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
 			if err != nil || lu == nil {
 				return
 			}
-			dir := lu.Path()
-			lastDir = dir
-			entries, err := os.ReadDir(dir)
-			if err != nil {
-				dialog.ShowError(err, w)
-				return
-			}
-			var found []string
-			for _, e := range entries {
-				if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".gpx") {
-					found = append(found, filepath.Join(dir, e.Name()))
-				}
-			}
-			sort.Strings(found)
-			if addPaths(found...) == 0 {
-				dialog.ShowInformation("Add folder", "No new .gpx files found in "+dir, w)
-				return
-			}
-			refreshFiles()
+			addFolderScan(lu.Path())
 		}, w)
 		d.SetView(dialog.ListView)
 		if l := dirLister(); l != nil {
@@ -214,6 +219,27 @@ func Run() error {
 		}
 		enlargeDialog(d)
 		d.Show()
+	}
+
+	// Add folder… adds every .gpx in a chosen directory at once (Fyne's file
+	// picker can't multi-select individual files). Uses the native directory
+	// chooser, falling back to Fyne's if it isn't available.
+	addFolderBtn := widget.NewButton("Add folder…", func() {
+		go func() {
+			dir, err := zenity.SelectFile(
+				zenity.Title("Add a folder of GPX files"),
+				zenity.Filename(lastDir+string(os.PathSeparator)),
+				zenity.Directory(),
+			)
+			if err == zenity.ErrCanceled {
+				return
+			}
+			if err != nil {
+				fyne.Do(fyneAddFolder)
+				return
+			}
+			fyne.Do(func() { addFolderScan(dir) })
+		}()
 	})
 
 	// Clear empties the file list and resets the (auto-filled) output name,

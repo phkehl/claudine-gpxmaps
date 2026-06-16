@@ -40,7 +40,13 @@ jobs:
       - name: Vet (full)
         run: go vet ./...
       - name: Build full binary
-        run: go build -o gpxmaps .
+        run: go build -o gpxmaps-linux-amd64 .
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpxmaps-linux-amd64
+          path: gpxmaps-linux-amd64
+          if-no-files-found: error
 
   # Cross-compile the CLI-only Windows binary to prove portability.
   build-windows:
@@ -51,4 +57,10 @@ jobs:
         with:
           go-version: '1.24'
       - name: Cross-compile Windows (nogui)
-        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags nogui -o gpxmaps.exe .
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags nogui -o gpxmaps-windows-amd64.exe .
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpxmaps-windows-amd64
+          path: gpxmaps-windows-amd64.exe
+          if-no-files-found: error
