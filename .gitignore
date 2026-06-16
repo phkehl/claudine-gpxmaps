@@ -1,0 +1,10 @@
+# Built binaries
+/gpxmaps
+/gpxmaps.exe
+
+# Generated output
+*.html
+!internal/render/template.gohtml
+
+# Local Claude Code settings
+/.claude/settings.local.json

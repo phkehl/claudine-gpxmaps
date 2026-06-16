@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.Title}}</title>
+<style>{{.LeafletCSS}}</style>
+<style>
+  html, body { height: 100%; margin: 0; }
+  #map { position: absolute; inset: 0; }
+  .gpx-title {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; background: rgba(255,255,255,0.9); padding: 4px 12px;
+    border-radius: 4px; font: 600 15px/1.3 system-ui, sans-serif;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3); pointer-events: none;
+  }
+  .gpx-legend {
+    background: rgba(255,255,255,0.92); padding: 8px 10px; border-radius: 4px;
+    font: 12px/1.4 system-ui, sans-serif; max-height: 70vh; overflow-y: auto;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3); max-width: 260px;
+  }
+  .gpx-legend .row { display: flex; align-items: flex-start; margin: 3px 0; }
+  .gpx-legend input { margin: 2px 6px 0 0; }
+  .gpx-legend .swatch {
+    display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+    margin: 2px 6px 0 0; flex: 0 0 auto;
+  }
+  .gpx-legend .name { font-weight: 600; }
+  .gpx-legend .stats { color: #444; font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>{{.LeafletJS}}</script>
+<script>
+const DATA = {{.DataJSON}};
+
+const map = L.map('map');
+L.tileLayer(DATA.tileUrl, { attribution: DATA.tileAttribution, maxZoom: 19 }).addTo(map);
+
+if (DATA.title) {
+  const t = document.createElement('div');
+  t.className = 'gpx-title';
+  t.textContent = DATA.title;
+  document.body.appendChild(t);
+}
+
+const groups = []; // per-track L.layerGroup, for legend toggling
+
+DATA.tracks.forEach((trk) => {
+  const group = L.layerGroup();
+
+  // Full-resolution track polyline.
+  if (trk.coords.length) {
+    L.polyline(trk.coords, { color: trk.color, weight: 3, opacity: 0.85 }).addTo(group);
+  }
+
+  // Start / end markers.
+  if (DATA.showMarkers && trk.coords.length) {
+    const start = trk.coords[0];
+    const end = trk.coords[trk.coords.length - 1];
+    L.circleMarker(start, markerStyle('#1a9850')).bindPopup(trk.name + ' — start').addTo(group);
+    L.circleMarker(end, markerStyle('#d73027')).bindPopup(trk.name + ' — end').addTo(group);
+  }
+
+  // Sampled point tooltips (timestamp + velocity).
+  if (DATA.showTooltips && trk.points) {
+    trk.points.forEach((p) => {
+      const lines = [];
+      if (p.t) lines.push(p.t);
+      if (p.v) lines.push(p.v);
+      const dot = L.circleMarker([p.lat, p.lon], {
+        radius: 3, color: trk.color, weight: 1, fillOpacity: 0.6,
+      });
+      if (lines.length) dot.bindTooltip(lines.join('<br>'));
+      dot.addTo(group);
+    });
+  }
+
+  group.addTo(map);
+  groups.push({ group, trk });
+});
+
+// Auto-fit to all tracks.
+if (DATA.bounds) {
+  map.fitBounds([DATA.bounds[0], DATA.bounds[1]], { padding: [20, 20] });
+} else {
+  map.setView([0, 0], 2);
+}
+
+// Legend with per-track visibility toggles and optional stats.
+if (DATA.showLegend && groups.length) {
+  const legend = L.control({ position: 'topright' });
+  legend.onAdd = function () {
+    const div = L.DomUtil.create('div', 'gpx-legend');
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+    groups.forEach(({ group, trk }) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.addEventListener('change', () => {
+        if (cb.checked) group.addTo(map); else map.removeLayer(group);
+      });
+      row.appendChild(cb);
+
+      const sw = document.createElement('span');
+      sw.className = 'swatch';
+      sw.style.background = trk.color;
+      row.appendChild(sw);
+
+      const txt = document.createElement('div');
+      let html = '<span class="name">' + escapeHtml(trk.name) + '</span>';
+      if (DATA.showStats) {
+        const s = trk.stats;
+        const parts = ['dist ' + s.distance, 'climb ' + s.elevGain];
+        if (s.hasTime) { parts.push('time ' + s.duration, 'avg ' + s.avgSpeed); }
+        html += '<div class="stats">' + parts.join(' · ') + '</div>';
+      }
+      txt.innerHTML = html;
+      row.appendChild(txt);
+
+      div.appendChild(row);
+    });
+    return div;
+  };
+  legend.addTo(map);
+}
+
+function markerStyle(color) {
+  return { radius: 5, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 };
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+</script>
+</body>
+</html>

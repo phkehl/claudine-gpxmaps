@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  # Vet + test + the CLI-only build. CGO-free, so no system deps needed.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Format check
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: Vet (nogui)
+        run: go vet -tags nogui ./...
+      - name: Test
+        run: go test ./...
+      - name: Build CLI-only binary
+        run: go build -tags nogui -o gpxmaps .
+
+  # Full GUI build, which needs CGO + the Fyne system libraries.
+  build-gui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Install Fyne build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      - name: Vet (full)
+        run: go vet ./...
+      - name: Build full binary
+        run: go build -o gpxmaps .
+
+  # Cross-compile the CLI-only Windows binary to prove portability.
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Cross-compile Windows (nogui)
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags nogui -o gpxmaps.exe .

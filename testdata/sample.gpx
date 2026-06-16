@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="gpxmaps-test" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Test Track</name>
+    <trkseg>
+      <trkpt lat="47.3769" lon="8.5417"><ele>400</ele><time>2024-01-01T10:00:00Z</time></trkpt>
+      <trkpt lat="47.3779" lon="8.5417"><ele>410</ele><time>2024-01-01T10:00:10Z</time></trkpt>
+      <trkpt lat="47.3789" lon="8.5417"><ele>405</ele><time>2024-01-01T10:00:20Z</time></trkpt>
+      <trkpt lat="47.3799" lon="8.5417"><ele>415</ele><time>2024-01-01T10:00:30Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
