@@ -35,6 +35,16 @@ The output is fully self-contained: Leaflet's CSS/JS are embedded inside the fil
 **only** thing fetched from the internet when you open it is the map *tiles* (the basemap
 imagery). Everything else works offline.
 
+### Google Maps layers
+
+Pass a Google Maps API key (CLI `--google-key`, or the **Google API key** field in the
+GUI) to add Google base layers — **Roadmap** (the default when a key is set), **Satellite**,
+**Hybrid** and **Terrain** — via the [Leaflet GoogleMutant](https://github.com/Leaflet/Leaflet.GoogleMutant)
+plugin, alongside OpenStreetMap in a layer switcher. With a key the output additionally
+loads Google's Maps JavaScript API from `maps.googleapis.com` (Google's API can't be
+inlined). The key is embedded in the HTML, so use a key restricted by HTTP referrer.
+Without a key, nothing Google-related is included and the file stays fully self-contained.
+
 ---
 
 ## Usage
@@ -76,6 +86,7 @@ If `-o`/`--output` is omitted, the output filename is built from the input file 
 | `-o`, `--output` | derived from inputs | Output HTML file |
 | `--title` | `GPX Tracks` | Map title / document title |
 | `--tile-url` | OSM | Leaflet tile URL template |
+| `--google-key` | — | Google Maps API key; adds Google base layers (default Roadmap) |
 | `--sample` | `0` (all) | Keep every Nth point for tooltips (polyline stays full-res) |
 | `--markers` | `true` | Start/end markers |
 | `--tooltips` | `true` | Per-point time/velocity tooltips |
@@ -161,7 +172,10 @@ go test ./...
   - `leaflet.js` (the unminified `leaflet-src.js`) — kept for reference/debugging.
   - (Leaflet ships a single distributed `leaflet.css`, so the min and full CSS are
     identical.)
-  - Source: <https://unpkg.com/leaflet@1.9.4/dist/>
+  - `googlemutant.js` — the Leaflet GoogleMutant plugin (v0.14.0), inlined only when a
+    Google API key is supplied.
+  - Source: <https://unpkg.com/leaflet@1.9.4/dist/> and
+    <https://unpkg.com/leaflet.gridlayer.googlemutant@0.14.0/dist/>
 - **One pipeline for both modes** — CLI and GUI both populate a `config.Config` and call
   `cli.Generate`, which parses inputs (`internal/gpx`) and renders HTML
   (`internal/render`). The GUI is a thin shell; the two front ends can't diverge.

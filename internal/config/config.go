@@ -42,6 +42,11 @@ type Config struct {
 	// TileAttribution is the attribution HTML for the tile layer.
 	TileAttribution string
 
+	// GoogleAPIKey, when set, enables Google Maps base layers (Roadmap,
+	// Satellite, Hybrid, Terrain) via the Leaflet GoogleMutant plugin, and
+	// makes Google Roadmap the default base layer. Empty = OSM only.
+	GoogleAPIKey string
+
 	// Sample, when > 1, keeps only every Nth point for markers/tooltips. The
 	// full track polyline is always drawn at full resolution; sampling only
 	// thins the interactive point markers so large tracks stay responsive. 0

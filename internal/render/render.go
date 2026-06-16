@@ -27,6 +27,12 @@ var leafletCSS string
 //go:embed assets/leaflet.min.js
 var leafletJS string
 
+// Leaflet GoogleMutant plugin — embeds Google Maps layers into Leaflet. Only
+// inlined into the output when a Google API key is configured.
+//
+//go:embed assets/googlemutant.js
+var googleMutantJS string
+
 //go:embed template.gohtml
 var pageTemplate string
 
@@ -69,6 +75,7 @@ type jsModel struct {
 	ShowTooltips    bool           `json:"showTooltips"`
 	ShowLegend      bool           `json:"showLegend"`
 	ShowStats       bool           `json:"showStats"`
+	Google          bool           `json:"google"` // Google base layers available
 	Bounds          *[2][2]float64 `json:"bounds"`
 	Tracks          []jsTrack      `json:"tracks"`
 	Waypoints       []jsWaypoint   `json:"waypoints"`
@@ -78,10 +85,12 @@ type jsModel struct {
 // as trusted (template.CSS/JS) because they are vendored or JSON-marshalled by
 // us, not user free-text.
 type templateData struct {
-	Title      string
-	LeafletCSS template.CSS
-	LeafletJS  template.JS
-	DataJSON   template.JS
+	Title          string
+	LeafletCSS     template.CSS
+	LeafletJS      template.JS
+	DataJSON       template.JS
+	GoogleAPIKey   string      // when non-empty, load Google Maps JS API + plugin
+	GoogleMutantJS template.JS // inlined only when GoogleAPIKey is set
 }
 
 var tmpl = template.Must(template.New("page").Parse(pageTemplate))
@@ -94,10 +103,14 @@ func HTML(m gpx.Model, cfg config.Config) ([]byte, error) {
 		return nil, fmt.Errorf("marshal view model: %w", err)
 	}
 	td := templateData{
-		Title:      cfg.Title,
-		LeafletCSS: template.CSS(leafletCSS),
-		LeafletJS:  template.JS(leafletJS),
-		DataJSON:   template.JS(data),
+		Title:        cfg.Title,
+		LeafletCSS:   template.CSS(leafletCSS),
+		LeafletJS:    template.JS(leafletJS),
+		DataJSON:     template.JS(data),
+		GoogleAPIKey: cfg.GoogleAPIKey,
+	}
+	if cfg.GoogleAPIKey != "" {
+		td.GoogleMutantJS = template.JS(googleMutantJS)
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, td); err != nil {
@@ -117,6 +130,7 @@ func buildView(m gpx.Model, cfg config.Config) jsModel {
 		ShowTooltips:    cfg.ShowTooltips,
 		ShowLegend:      cfg.ShowLegend,
 		ShowStats:       cfg.ShowStats,
+		Google:          cfg.GoogleAPIKey != "",
 	}
 	if m.HasBounds {
 		out.Bounds = &[2][2]float64{{m.MinLat, m.MinLon}, {m.MaxLat, m.MaxLon}}

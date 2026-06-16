@@ -32,11 +32,33 @@
 <body>
 <div id="map"></div>
 <script>{{.LeafletJS}}</script>
+{{if .GoogleAPIKey}}
+<script src="https://maps.googleapis.com/maps/api/js?key={{.GoogleAPIKey}}"></script>
+<script>{{.GoogleMutantJS}}</script>
+{{end}}
 <script>
 const DATA = {{.DataJSON}};
 
 const map = L.map('map');
-L.tileLayer(DATA.tileUrl, { attribution: DATA.tileAttribution, maxZoom: 19 }).addTo(map);
+
+// Base layers. OpenStreetMap is always available; Google layers are added when
+// an API key was supplied, with Google Roadmap as the default.
+const osm = L.tileLayer(DATA.tileUrl, { attribution: DATA.tileAttribution, maxZoom: 19 });
+const baseLayers = { 'OpenStreetMap': osm };
+let defaultBase = osm;
+if (DATA.google && L.gridLayer && L.gridLayer.googleMutant) {
+  const g = (type) => L.gridLayer.googleMutant({ type });
+  const gRoad = g('roadmap'), gSat = g('satellite'), gHybrid = g('hybrid'), gTerrain = g('terrain');
+  baseLayers['Google Roadmap'] = gRoad;
+  baseLayers['Google Satellite'] = gSat;
+  baseLayers['Google Hybrid'] = gHybrid;
+  baseLayers['Google Terrain'] = gTerrain;
+  defaultBase = gRoad;
+}
+defaultBase.addTo(map);
+if (Object.keys(baseLayers).length > 1) {
+  L.control.layers(baseLayers).addTo(map);
+}
 
 if (DATA.title) {
   const t = document.createElement('div');

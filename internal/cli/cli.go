@@ -32,6 +32,7 @@ func Run(args []string) error {
 	fs.StringVar(&cfg.Output, "output", "", "output HTML file (alias of -o)")
 	fs.StringVar(&cfg.Title, "title", cfg.Title, "map title")
 	fs.StringVar(&cfg.TileURL, "tile-url", cfg.TileURL, "Leaflet tile URL template")
+	fs.StringVar(&cfg.GoogleAPIKey, "google-key", cfg.GoogleAPIKey, "Google Maps API key (enables Google base layers, default Roadmap)")
 	fs.IntVar(&cfg.Sample, "sample", cfg.Sample, "keep every Nth point for tooltips (0/1 = all)")
 	fs.BoolVar(&cfg.ShowMarkers, "markers", cfg.ShowMarkers, "show start/end markers")
 	fs.BoolVar(&cfg.ShowTooltips, "tooltips", cfg.ShowTooltips, "show per-point time/velocity tooltips")

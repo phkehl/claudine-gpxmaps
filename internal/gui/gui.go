@@ -312,6 +312,9 @@ func Run() error {
 	tileEntry := widget.NewEntry()
 	tileEntry.SetText(cfg.TileURL)
 
+	googleKeyEntry := widget.NewEntry()
+	googleKeyEntry.SetPlaceHolder("optional — enables Google layers (default Roadmap)")
+
 	sampleEntry := widget.NewEntry()
 	sampleEntry.SetText("0")
 
@@ -332,6 +335,7 @@ func Run() error {
 		widget.NewFormItem("Output", container.NewBorder(nil, nil, nil, browseBtn, outputEntry)),
 		widget.NewFormItem("Title", titleEntry),
 		widget.NewFormItem("Tile URL", tileEntry),
+		widget.NewFormItem("Google API key", googleKeyEntry),
 		widget.NewFormItem("Sample Nth pt", sampleEntry),
 		widget.NewFormItem("Serve address", addrEntry),
 	)
@@ -365,6 +369,7 @@ func Run() error {
 		run.Output = outputEntry.Text
 		run.Title = titleEntry.Text
 		run.TileURL = tileEntry.Text
+		run.GoogleAPIKey = strings.TrimSpace(googleKeyEntry.Text)
 		run.Sample, _ = strconv.Atoi(sampleEntry.Text)
 		run.ShowMarkers = markersChk.Checked
 		run.ShowTooltips = tooltipsChk.Checked
