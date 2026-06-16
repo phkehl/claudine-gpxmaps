@@ -81,7 +81,26 @@ DATA.tracks.forEach((trk) => {
   groups.push({ group, trk });
 });
 
-// Auto-fit to all tracks.
+// Standalone waypoints (GPX <wpt>) as markers with name/description popups.
+if (DATA.waypoints && DATA.waypoints.length) {
+  const wptGroup = L.layerGroup();
+  DATA.waypoints.forEach((w) => {
+    const m = L.circleMarker([w.lat, w.lon], {
+      radius: 4, color: '#333', weight: 1, fillColor: '#ffd400', fillOpacity: 1,
+    });
+    const parts = [];
+    if (w.name) parts.push(escapeHtml(w.name));
+    if (w.desc && w.desc !== w.name) parts.push(escapeHtml(w.desc));
+    if (parts.length) {
+      m.bindPopup(parts.join('<br>'));
+      m.bindTooltip(escapeHtml(w.name || w.desc));
+    }
+    m.addTo(wptGroup);
+  });
+  wptGroup.addTo(map);
+}
+
+// Auto-fit to all tracks and waypoints.
 if (DATA.bounds) {
   map.fitBounds([DATA.bounds[0], DATA.bounds[1]], { padding: [20, 20] });
 } else {

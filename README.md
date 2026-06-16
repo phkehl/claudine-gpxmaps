@@ -14,6 +14,11 @@ install.
 
 ## What it produces
 
+It accepts GPX **tracks** (`<trk>`), **routes** (`<rte>`) and standalone
+**waypoints** (`<wpt>`), in both GPX 1.0 and 1.1 — so track-only, route-only and
+waypoint-only files all work. Tracks and routes render as paths; waypoints render as
+labelled markers.
+
 A standalone `.html` containing your tracks on an OpenStreetMap basemap, with:
 
 - **Auto-fit** — the map zooms/pans to frame all tracks on load.
@@ -141,7 +146,7 @@ go test ./...
 ```
 main.go                         mode dispatch (no args/--gui → GUI, else CLI)
 internal/config/                shared Config struct, defaults, color palette
-internal/gpx/                   parse .gpx → Model (tracks, points, stats) via gpxgo
+internal/gpx/                   parse .gpx → Model (tracks, routes, waypoints) via gpxgo
 internal/render/                Model + Config → self-contained HTML
 internal/render/assets/         vendored, committed Leaflet (min + full)
 internal/render/template.gohtml HTML template + Leaflet bootstrap JS

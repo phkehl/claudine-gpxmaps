@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<gpx version="1.0" creator="test" xmlns="http://www.topografix.com/GPX/1/0">
+  <wpt lat="42.4389" lon="-71.1193">
+    <ele>44.5</ele>
+    <name>Trailhead</name>
+    <desc><![CDATA[Start of the loop]]></desc>
+  </wpt>
+  <rte>
+    <name>Fells Loop</name>
+    <rtept lat="42.4300" lon="-71.1100"><ele>40</ele></rtept>
+    <rtept lat="42.4310" lon="-71.1100"><ele>50</ele></rtept>
+    <rtept lat="42.4320" lon="-71.1100"><ele>45</ele></rtept>
+  </rte>
+</gpx>

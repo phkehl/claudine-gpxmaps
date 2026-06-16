@@ -54,6 +54,13 @@ type jsTrack struct {
 	Stats  jsStats      `json:"stats"`
 }
 
+type jsWaypoint struct {
+	Lat  float64 `json:"lat"`
+	Lon  float64 `json:"lon"`
+	Name string  `json:"name"`
+	Desc string  `json:"desc"`
+}
+
 type jsModel struct {
 	Title           string         `json:"title"`
 	TileURL         string         `json:"tileUrl"`
@@ -64,6 +71,7 @@ type jsModel struct {
 	ShowStats       bool           `json:"showStats"`
 	Bounds          *[2][2]float64 `json:"bounds"`
 	Tracks          []jsTrack      `json:"tracks"`
+	Waypoints       []jsWaypoint   `json:"waypoints"`
 }
 
 // templateData is what the Go template renders. The asset/data fields are typed
@@ -124,6 +132,11 @@ func buildView(m gpx.Model, cfg config.Config) jsModel {
 			jt.Points = sampledPoints(t.Points, cfg.Sample)
 		}
 		out.Tracks = append(out.Tracks, jt)
+	}
+	for _, w := range m.Waypoints {
+		out.Waypoints = append(out.Waypoints, jsWaypoint{
+			Lat: w.Lat, Lon: w.Lon, Name: w.Name, Desc: w.Desc,
+		})
 	}
 	return out
 }

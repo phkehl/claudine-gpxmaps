@@ -1,8 +1,9 @@
 // Package gpx parses one or more .gpx files into a simple, render-ready Model:
-// a flat list of tracks, each with its points (lat/lon/ele/time + per-point
-// speed) and summary statistics, plus the overall lat/lon bounds used to
-// auto-fit the map. Parsing and geo/speed maths are delegated to
-// github.com/tkrajina/gpxgo rather than re-implemented.
+// a flat list of paths (tracks AND routes), each with its points
+// (lat/lon/ele/time + per-point speed) and summary statistics, plus any
+// standalone waypoints and the overall lat/lon bounds used to auto-fit the map.
+// Parsing and geo/speed maths are delegated to github.com/tkrajina/gpxgo rather
+// than re-implemented.
 package gpx
 
 import (
@@ -13,7 +14,7 @@ import (
 	gpxgo "github.com/tkrajina/gpxgo/gpx"
 )
 
-// Point is a single track point. Has* flags distinguish a genuine zero value
+// Point is a single path point. Has* flags distinguish a genuine zero value
 // (e.g. elevation exactly 0 m) from missing data in the source GPX.
 type Point struct {
 	Lat, Lon float64
@@ -24,32 +25,45 @@ type Point struct {
 	Speed    float64 // metres/second, computed from the previous point; 0 if unknown
 }
 
-// Stats summarises a track.
+// Stats summarises a path.
 type Stats struct {
 	Distance float64       // total 2D length, metres
 	ElevGain float64       // cumulative uphill, metres
-	Duration time.Duration // wall-clock span of the track
-	AvgSpeed float64       // moving average, metres/second
-	HasTime  bool          // whether the track carried timestamps
+	Duration time.Duration // wall-clock span (only when timestamps increase)
+	AvgSpeed float64       // average speed over the duration, metres/second
+	HasTime  bool          // whether the path carried usable timestamps
 }
 
-// Track is one rendered path: all segments of a source <trk> concatenated.
+// Track is one rendered path. It comes from either a GPX <trk> (its segments
+// concatenated) or a GPX <rte> route; both are just an ordered list of points
+// as far as the map is concerned.
 type Track struct {
 	Name   string
 	Points []Point
 	Stats  Stats
 }
 
+// Waypoint is a standalone point of interest (GPX <wpt>), rendered as a marker
+// rather than part of a path.
+type Waypoint struct {
+	Lat, Lon float64
+	Name     string
+	Desc     string
+}
+
 // Model is the complete parsed input for one generation run.
 type Model struct {
 	Tracks                         []Track
+	Waypoints                      []Waypoint
 	MinLat, MinLon, MaxLat, MaxLon float64
 	HasBounds                      bool
 }
 
-// ParseFiles parses every path in order and returns a combined Model. Each
-// <trk> in each file becomes one Track. Files with no track points are skipped
-// silently; an unparseable file is a hard error so batch runs fail loudly.
+// ParseFiles parses every path in order and returns a combined Model. Every
+// <trk> and every <rte> becomes a Track, and every <wpt> becomes a Waypoint, so
+// the tool handles track-only, route-only and waypoint-only files alike. Empty
+// paths are skipped silently; an unparseable file is a hard error so batch runs
+// fail loudly.
 func ParseFiles(paths []string) (Model, error) {
 	var m Model
 	for _, p := range paths {
@@ -58,100 +72,145 @@ func ParseFiles(paths []string) (Model, error) {
 			return Model{}, fmt.Errorf("parse %s: %w", p, err)
 		}
 		base := filepath.Base(p)
+
+		// <trk> tracks: concatenate every segment's points.
 		for ti := range g.Tracks {
 			trk := &g.Tracks[ti]
-			t := buildTrack(trk, base, ti)
-			if len(t.Points) == 0 {
-				continue
+			var gpts []*gpxgo.GPXPoint
+			for si := range trk.Segments {
+				seg := &trk.Segments[si]
+				for pi := range seg.Points {
+					gpts = append(gpts, &seg.Points[pi])
+				}
 			}
-			m.Tracks = append(m.Tracks, t)
-			m.extendBounds(t.Points)
+			m.addTrack(fallbackName(trk.Name, base, "track", ti), gpts)
+		}
+
+		// <rte> routes: an ordered list of points, treated like a track.
+		for ri := range g.Routes {
+			rte := &g.Routes[ri]
+			gpts := make([]*gpxgo.GPXPoint, 0, len(rte.Points))
+			for pi := range rte.Points {
+				gpts = append(gpts, &rte.Points[pi])
+			}
+			m.addTrack(fallbackName(rte.Name, base, "route", ri), gpts)
+		}
+
+		// <wpt> waypoints: standalone markers.
+		for wi := range g.Waypoints {
+			wp := &g.Waypoints[wi]
+			m.Waypoints = append(m.Waypoints, Waypoint{
+				Lat:  wp.Latitude,
+				Lon:  wp.Longitude,
+				Name: wp.Name,
+				Desc: wp.Description,
+			})
+			m.extendBoundsLatLon(wp.Latitude, wp.Longitude)
 		}
 	}
 	return m, nil
 }
 
-// buildTrack flattens a gpxgo track into our Track, computing per-point speed
-// and summary stats.
-func buildTrack(trk *gpxgo.GPXTrack, fileBase string, idx int) Track {
-	name := trk.Name
-	if name == "" {
-		// Fall back to the file name, disambiguating multiple tracks per file.
-		name = fileBase
-		if idx > 0 {
-			name = fmt.Sprintf("%s #%d", fileBase, idx+1)
-		}
+// addTrack converts gpxgo points into a Track and appends it (plus its bounds)
+// to the model. Tracks with no points are dropped.
+func (m *Model) addTrack(name string, gpts []*gpxgo.GPXPoint) {
+	if len(gpts) == 0 {
+		return
 	}
-
-	var pts []Point
+	pts := make([]Point, 0, len(gpts))
 	var prev *gpxgo.GPXPoint
-	for si := range trk.Segments {
-		seg := &trk.Segments[si]
-		for pi := range seg.Points {
-			gp := &seg.Points[pi]
-			p := Point{
-				Lat:     gp.Latitude,
-				Lon:     gp.Longitude,
-				HasTime: !gp.Timestamp.IsZero(),
-				Time:    gp.Timestamp,
-			}
-			if gp.Elevation.NotNull() {
-				p.Ele = gp.Elevation.Value()
-				p.HasEle = true
-			}
-			if prev != nil {
-				p.Speed = gp.SpeedBetween(prev, false)
-			}
-			pts = append(pts, p)
-			prev = gp
+	for _, gp := range gpts {
+		p := Point{
+			Lat:     gp.Latitude,
+			Lon:     gp.Longitude,
+			HasTime: !gp.Timestamp.IsZero(),
+			Time:    gp.Timestamp,
 		}
+		if gp.Elevation.NotNull() {
+			p.Ele = gp.Elevation.Value()
+			p.HasEle = true
+		}
+		if prev != nil {
+			p.Speed = gp.SpeedBetween(prev, false)
+		}
+		pts = append(pts, p)
+		prev = gp
 	}
-
-	return Track{Name: name, Points: pts, Stats: statsFor(trk)}
+	m.Tracks = append(m.Tracks, Track{Name: name, Points: pts, Stats: computeStats(pts)})
+	m.extendBounds(pts)
 }
 
-// statsFor derives summary statistics using gpxgo's helpers.
-func statsFor(trk *gpxgo.GPXTrack) Stats {
-	md := trk.MovingData()
-	var avg float64
-	if md.MovingTime > 0 {
-		avg = md.MovingDistance / md.MovingTime
+// fallbackName uses the source element's name if present, otherwise derives a
+// readable, unambiguous one from the file and element kind/index.
+func fallbackName(name, fileBase, kind string, idx int) string {
+	if name != "" {
+		return name
 	}
-	tb := trk.TimeBounds()
-	var dur time.Duration
-	hasTime := !tb.StartTime.IsZero() && !tb.EndTime.IsZero()
-	if hasTime {
-		dur = tb.EndTime.Sub(tb.StartTime)
+	return fmt.Sprintf("%s (%s %d)", fileBase, kind, idx+1)
+}
+
+// computeStats derives summary statistics directly from the flattened points,
+// so it works identically for tracks and routes. Distance uses the haversine
+// helper from gpxgo; duration/average speed are reported only when timestamps
+// are present and strictly increasing (routes often carry unrelated times).
+func computeStats(pts []Point) Stats {
+	var dist, gain float64
+	for i := 1; i < len(pts); i++ {
+		dist += gpxgo.HaversineDistance(pts[i-1].Lat, pts[i-1].Lon, pts[i].Lat, pts[i].Lon)
+		if pts[i].HasEle && pts[i-1].HasEle {
+			if d := pts[i].Ele - pts[i-1].Ele; d > 0 {
+				gain += d
+			}
+		}
 	}
-	return Stats{
-		Distance: trk.Length2D(),
-		ElevGain: trk.UphillDownhill().Uphill,
-		Duration: dur,
-		AvgSpeed: avg,
-		HasTime:  hasTime,
+
+	var first, last time.Time
+	for _, p := range pts {
+		if !p.HasTime {
+			continue
+		}
+		if first.IsZero() {
+			first = p.Time
+		}
+		last = p.Time
 	}
+
+	s := Stats{Distance: dist, ElevGain: gain}
+	if !first.IsZero() && last.After(first) {
+		s.HasTime = true
+		s.Duration = last.Sub(first)
+		if secs := s.Duration.Seconds(); secs > 0 {
+			s.AvgSpeed = dist / secs
+		}
+	}
+	return s
 }
 
 // extendBounds grows the model's bounding box to include the given points.
 func (m *Model) extendBounds(pts []Point) {
 	for _, p := range pts {
-		if !m.HasBounds {
-			m.MinLat, m.MaxLat = p.Lat, p.Lat
-			m.MinLon, m.MaxLon = p.Lon, p.Lon
-			m.HasBounds = true
-			continue
-		}
-		if p.Lat < m.MinLat {
-			m.MinLat = p.Lat
-		}
-		if p.Lat > m.MaxLat {
-			m.MaxLat = p.Lat
-		}
-		if p.Lon < m.MinLon {
-			m.MinLon = p.Lon
-		}
-		if p.Lon > m.MaxLon {
-			m.MaxLon = p.Lon
-		}
+		m.extendBoundsLatLon(p.Lat, p.Lon)
+	}
+}
+
+// extendBoundsLatLon grows the model's bounding box to include one coordinate.
+func (m *Model) extendBoundsLatLon(lat, lon float64) {
+	if !m.HasBounds {
+		m.MinLat, m.MaxLat = lat, lat
+		m.MinLon, m.MaxLon = lon, lon
+		m.HasBounds = true
+		return
+	}
+	if lat < m.MinLat {
+		m.MinLat = lat
+	}
+	if lat > m.MaxLat {
+		m.MaxLat = lat
+	}
+	if lon < m.MinLon {
+		m.MinLon = lon
+	}
+	if lon > m.MaxLon {
+		m.MaxLon = lon
 	}
 }

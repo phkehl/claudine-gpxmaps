@@ -84,8 +84,8 @@ func Generate(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	if len(m.Tracks) == 0 {
-		return fmt.Errorf("no tracks found in the input file(s)")
+	if len(m.Tracks) == 0 && len(m.Waypoints) == 0 {
+		return fmt.Errorf("no tracks, routes, or waypoints found in the input file(s)")
 	}
 	html, err := render.HTML(m, cfg)
 	if err != nil {
