@@ -78,6 +78,17 @@ func Run() error {
 		return l
 	}
 
+	// enlargeDialog sizes a file dialog to most of the window (Fyne dialogs are
+	// bounded by their parent window) so the detailed view has room. It scales
+	// with the window, so resizing the window makes the next dialog larger too.
+	enlargeDialog := func(d *dialog.FileDialog) {
+		s := w.Canvas().Size()
+		if s.Width < 200 || s.Height < 200 {
+			s = fyne.NewSize(620, 640) // before first layout
+		}
+		d.Resize(fyne.NewSize(s.Width*0.95, s.Height*0.95))
+	}
+
 	addBtn := widget.NewButton("Add GPX…", func() {
 		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err != nil || r == nil {
@@ -99,6 +110,7 @@ func Run() error {
 		if l := cwdLister(); l != nil {
 			d.SetLocation(l)
 		}
+		enlargeDialog(d)
 		d.Show()
 	})
 	clearBtn := widget.NewButton("Clear", func() {
@@ -119,6 +131,7 @@ func Run() error {
 		if l := cwdLister(); l != nil {
 			d.SetLocation(l)
 		}
+		enlargeDialog(d)
 		d.Show()
 	})
 
@@ -236,7 +249,7 @@ func Run() error {
 	)
 
 	w.SetContent(container.NewVScroll(content))
-	w.Resize(fyne.NewSize(440, 560))
+	w.Resize(fyne.NewSize(640, 680))
 	w.ShowAndRun()
 	return nil
 }
