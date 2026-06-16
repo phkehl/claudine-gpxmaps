@@ -66,7 +66,19 @@ type Model struct {
 // fail loudly.
 func ParseFiles(paths []string) (Model, error) {
 	var m Model
+	seen := make(map[string]bool)
 	for _, p := range paths {
+		// Skip a file already parsed (matched by absolute path) so the same
+		// file passed more than once doesn't add its tracks twice.
+		key := p
+		if abs, err := filepath.Abs(p); err == nil {
+			key = abs
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
 		g, err := gpxgo.ParseFile(p)
 		if err != nil {
 			return Model{}, fmt.Errorf("parse %s: %w", p, err)

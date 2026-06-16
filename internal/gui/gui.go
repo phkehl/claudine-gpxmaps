@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -64,14 +65,18 @@ func Run() error {
 		outputEntry.SetText(lastAutofill)
 	}
 
-	// cwdLister points the file dialogs at the current working directory by
-	// default (Fyne otherwise opens at the user's home / last location).
-	cwdLister := func() fyne.ListableURI {
-		dir, err := os.Getwd()
-		if err != nil {
+	// lastDir is where the file dialogs open. It starts at the current working
+	// directory and then follows wherever the user last picked a file, so
+	// adding several files from one folder doesn't reset to cwd each time.
+	lastDir := ""
+	if wd, err := os.Getwd(); err == nil {
+		lastDir = wd
+	}
+	dirLister := func() fyne.ListableURI {
+		if lastDir == "" {
 			return nil
 		}
-		l, err := storage.ListerForURI(storage.NewFileURI(dir))
+		l, err := storage.ListerForURI(storage.NewFileURI(lastDir))
 		if err != nil {
 			return nil
 		}
@@ -96,6 +101,7 @@ func Run() error {
 			}
 			defer r.Close()
 			path := r.URI().Path()
+			lastDir = filepath.Dir(path) // remember for the next dialog
 			for _, p := range inputs {
 				if p == path {
 					return // already added; ignore duplicates
@@ -107,7 +113,7 @@ func Run() error {
 		}, w)
 		d.SetFilter(storage.NewExtensionFileFilter([]string{".gpx"}))
 		d.SetView(dialog.ListView)
-		if l := cwdLister(); l != nil {
+		if l := dirLister(); l != nil {
 			d.SetLocation(l)
 		}
 		enlargeDialog(d)
@@ -124,11 +130,13 @@ func Run() error {
 				return
 			}
 			defer wr.Close()
-			outputEntry.SetText(wr.URI().Path())
+			path := wr.URI().Path()
+			lastDir = filepath.Dir(path) // remember for the next dialog
+			outputEntry.SetText(path)
 		}, w)
 		d.SetFileName(outputEntry.Text)
 		d.SetView(dialog.ListView)
-		if l := cwdLister(); l != nil {
+		if l := dirLister(); l != nil {
 			d.SetLocation(l)
 		}
 		enlargeDialog(d)
@@ -249,7 +257,7 @@ func Run() error {
 	)
 
 	w.SetContent(container.NewVScroll(content))
-	w.Resize(fyne.NewSize(640, 680))
+	w.Resize(fyne.NewSize(640, 760))
 	w.ShowAndRun()
 	return nil
 }

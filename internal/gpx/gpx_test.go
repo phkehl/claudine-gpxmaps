@@ -53,6 +53,25 @@ func TestParseSample(t *testing.T) {
 	}
 }
 
+// TestParseFilesDeduplicates ensures the same file passed more than once (even
+// via different path spellings) contributes its tracks only once.
+func TestParseFilesDeduplicates(t *testing.T) {
+	once, err := ParseFiles([]string{"../../testdata/sample.gpx"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	twice, err := ParseFiles([]string{
+		"../../testdata/sample.gpx",
+		"../../testdata/../testdata/sample.gpx", // same file, different spelling
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(twice.Tracks) != len(once.Tracks) {
+		t.Errorf("duplicate input produced %d tracks, want %d", len(twice.Tracks), len(once.Tracks))
+	}
+}
+
 // TestParseRouteAndWaypoints covers GPX 1.0 files that carry a <rte> route and
 // <wpt> waypoints instead of a <trk> (e.g. the classic ExpertGPS fells_loop).
 func TestParseRouteAndWaypoints(t *testing.T) {
