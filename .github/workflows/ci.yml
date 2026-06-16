@@ -19,7 +19,9 @@ jobs:
       - name: Vet (nogui)
         run: go vet -tags nogui ./...
       - name: Test
-        run: go test ./...
+        # -tags nogui keeps this job CGO-free; the GUI package (Fyne/glfw needs
+        # X11/GL headers) is compiled and vetted in the build-gui job instead.
+        run: go test -tags nogui ./...
       - name: Build CLI-only binary
         run: go build -tags nogui -o gpxmaps .
 
