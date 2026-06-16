@@ -11,7 +11,9 @@ package gui
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -109,12 +111,35 @@ func Run() error {
 	statsChk := widget.NewCheck("Stats in legend", nil)
 	statsChk.SetChecked(cfg.ShowStats)
 
+	serveChk := widget.NewCheck("Serve over HTTP after generating", nil)
+	addrEntry := widget.NewEntry()
+	addrEntry.SetText(":8080")
+
 	form := widget.NewForm(
 		widget.NewFormItem("Output", container.NewBorder(nil, nil, nil, browseBtn, outputEntry)),
 		widget.NewFormItem("Title", titleEntry),
 		widget.NewFormItem("Tile URL", tileEntry),
 		widget.NewFormItem("Sample Nth pt", sampleEntry),
+		widget.NewFormItem("Serve address", addrEntry),
 	)
+
+	// Status area below the button: shows what was written and, when serving,
+	// a clickable link to the running server.
+	status := container.NewVBox()
+
+	// HTTP server state. The server starts once and thereafter serves whatever
+	// the most recent Generate produced (servedFile, guarded by the mutex).
+	var (
+		srvMu      sync.Mutex
+		servedFile string
+		srvURL     string
+		srvStarted bool
+	)
+	currentFile := func() string {
+		srvMu.Lock()
+		defer srvMu.Unlock()
+		return servedFile
+	}
 
 	// --- Generate --------------------------------------------------------
 	generateBtn := widget.NewButton("Generate", func() {
@@ -137,7 +162,30 @@ func Run() error {
 			dialog.ShowError(err, w)
 			return
 		}
-		dialog.ShowInformation("Done", "Wrote "+run.Output, w)
+
+		objs := []fyne.CanvasObject{widget.NewLabel("Wrote " + run.Output)}
+		if serveChk.Checked {
+			srvMu.Lock()
+			servedFile = run.Output
+			srvMu.Unlock()
+			if !srvStarted {
+				u, err := cli.StartServer(addrEntry.Text, currentFile)
+				if err != nil {
+					dialog.ShowError(fmt.Errorf("file written, but serving failed: %w", err), w)
+				} else {
+					srvStarted, srvURL = true, u
+				}
+			}
+			if srvStarted {
+				link, _ := url.Parse(srvURL)
+				objs = append(objs, container.NewHBox(
+					widget.NewLabel("Serving at"),
+					widget.NewHyperlink(srvURL, link),
+				))
+			}
+		}
+		status.Objects = objs
+		status.Refresh()
 	})
 	generateBtn.Importance = widget.HighImportance
 
@@ -152,9 +200,10 @@ func Run() error {
 		container.NewHBox(addBtn, clearBtn),
 		widget.NewSeparator(),
 		form,
-		markersChk, tooltipsChk, legendChk, statsChk,
+		markersChk, tooltipsChk, legendChk, statsChk, serveChk,
 		widget.NewSeparator(),
 		generateBtn,
+		status,
 	)
 
 	w.SetContent(container.NewVScroll(content))

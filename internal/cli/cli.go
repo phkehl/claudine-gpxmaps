@@ -6,6 +6,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -92,21 +93,44 @@ func Run(args []string) error {
 	return nil
 }
 
+// ServeURL returns the human-facing URL for a listen address, e.g. ":8080" ->
+// "http://localhost:8080/".
+func ServeURL(addr string) string {
+	if strings.HasPrefix(addr, ":") {
+		return "http://localhost" + addr + "/"
+	}
+	return "http://" + addr + "/"
+}
+
+// fileServer returns a handler that serves the file returned by currentFile()
+// for every request (so the served content tracks the latest generation).
+func fileServer(currentFile func() string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, currentFile())
+	})
+	return mux
+}
+
+// StartServer binds addr and serves currentFile() in a background goroutine,
+// returning the URL to open. It fails fast if the address can't be bound. Used
+// by the GUI, which must not block; the CLI uses the blocking serveFile.
+func StartServer(addr string, currentFile func() string) (string, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", err
+	}
+	go http.Serve(ln, fileServer(currentFile))
+	return ServeURL(addr), nil
+}
+
 // serveFile serves the generated HTML over HTTP until the process is
 // interrupted. Every path returns the same file, so http://host:port/ just
 // works; map tiles are still fetched by the browser directly from the tile
 // server.
 func serveFile(addr, file string) error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, file)
-	})
-	shown := addr
-	if strings.HasPrefix(addr, ":") {
-		shown = "localhost" + addr
-	}
-	fmt.Printf("Serving %s at http://%s/ (Ctrl+C to stop)\n", file, shown)
-	return http.ListenAndServe(addr, mux)
+	fmt.Printf("Serving %s at %s (Ctrl+C to stop)\n", file, ServeURL(addr))
+	return http.ListenAndServe(addr, fileServer(func() string { return file }))
 }
 
 // Generate runs the shared pipeline: parse the configured inputs, render HTML,
