@@ -84,7 +84,13 @@ func Run() error {
 				return
 			}
 			defer r.Close()
-			inputs = append(inputs, r.URI().Path())
+			path := r.URI().Path()
+			for _, p := range inputs {
+				if p == path {
+					return // already added; ignore duplicates
+				}
+			}
+			inputs = append(inputs, path)
 			fileList.Refresh()
 			setAutofill()
 		}, w)
