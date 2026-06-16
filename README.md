@@ -1,3 +1,6 @@
+**Warning -- This is AI generated code**
+(purpose: me playing with Claudine...)
+
 # gpxmaps
 
 Turn GPX track files into a **single, self-contained HTML map** you can open in any
