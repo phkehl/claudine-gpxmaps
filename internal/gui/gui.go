@@ -12,6 +12,7 @@ package gui
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 
@@ -63,6 +64,20 @@ func Run() error {
 		outputEntry.SetText(lastAutofill)
 	}
 
+	// cwdLister points the file dialogs at the current working directory by
+	// default (Fyne otherwise opens at the user's home / last location).
+	cwdLister := func() fyne.ListableURI {
+		dir, err := os.Getwd()
+		if err != nil {
+			return nil
+		}
+		l, err := storage.ListerForURI(storage.NewFileURI(dir))
+		if err != nil {
+			return nil
+		}
+		return l
+	}
+
 	addBtn := widget.NewButton("Add GPX…", func() {
 		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err != nil || r == nil {
@@ -74,6 +89,9 @@ func Run() error {
 			setAutofill()
 		}, w)
 		d.SetFilter(storage.NewExtensionFileFilter([]string{".gpx"}))
+		if l := cwdLister(); l != nil {
+			d.SetLocation(l)
+		}
 		d.Show()
 	})
 	clearBtn := widget.NewButton("Clear", func() {
@@ -90,6 +108,9 @@ func Run() error {
 			outputEntry.SetText(wr.URI().Path())
 		}, w)
 		d.SetFileName(outputEntry.Text)
+		if l := cwdLister(); l != nil {
+			d.SetLocation(l)
+		}
 		d.Show()
 	})
 
