@@ -433,7 +433,24 @@ func Run() error {
 	)
 
 	w.SetContent(container.NewVScroll(content))
-	w.Resize(fyne.NewSize(640, 760))
+
+	// Restore the last window size (Fyne has no API for window position, so
+	// only the size can be remembered). Fall back to a sensible default.
+	const defW, defH = 640, 820
+	winW := float32(prefs.FloatWithFallback("winWidth", defW))
+	winH := float32(prefs.FloatWithFallback("winHeight", defH))
+	if winW < 300 || winH < 300 {
+		winW, winH = defW, defH
+	}
+	w.Resize(fyne.NewSize(winW, winH))
+	w.SetOnClosed(func() {
+		s := w.Canvas().Size()
+		if s.Width > 0 && s.Height > 0 {
+			prefs.SetFloat("winWidth", float64(s.Width))
+			prefs.SetFloat("winHeight", float64(s.Height))
+		}
+	})
+
 	w.ShowAndRun()
 	return nil
 }

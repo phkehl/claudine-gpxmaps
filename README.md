@@ -116,8 +116,9 @@ local server on Generate; the window then shows a clickable link to open the map
 browser. The output filename auto-fills from the input files until you set your own.
 
 All settings (title, tile URL, Google key, sample, serve options and the feature
-checkboxes) are **remembered across runs** via Fyne preferences; only the GPX file list
-and the output filename reset each time.
+checkboxes) plus the **window size** are **remembered across runs** via Fyne preferences;
+only the GPX file list and the output filename reset each time. (Window *position* isn't
+restored — Fyne has no API to read or set it.)
 
 ---
 
