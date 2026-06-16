@@ -41,6 +41,26 @@ func Run() error {
 		},
 	)
 
+	// --- Output path (declared first so Add can auto-fill it) ------------
+	// While the user hasn't picked/typed their own name, the output field
+	// tracks the input file names (matching the CLI's default naming).
+	outputEntry := widget.NewEntry()
+	outputAutofill := true
+	lastAutofill := cfg.Output
+	outputEntry.OnChanged = func(s string) {
+		if s != lastAutofill {
+			outputAutofill = false
+		}
+	}
+	outputEntry.SetText(cfg.Output)
+	setAutofill := func() {
+		if !outputAutofill {
+			return
+		}
+		lastAutofill = config.OutputName(inputs)
+		outputEntry.SetText(lastAutofill)
+	}
+
 	addBtn := widget.NewButton("Add GPX…", func() {
 		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err != nil || r == nil {
@@ -49,6 +69,7 @@ func Run() error {
 			defer r.Close()
 			inputs = append(inputs, r.URI().Path())
 			fileList.Refresh()
+			setAutofill()
 		}, w)
 		d.SetFilter(storage.NewExtensionFileFilter([]string{".gpx"}))
 		d.Show()
@@ -58,9 +79,6 @@ func Run() error {
 		fileList.Refresh()
 	})
 
-	// --- Output + options ------------------------------------------------
-	outputEntry := widget.NewEntry()
-	outputEntry.SetText(cfg.Output)
 	browseBtn := widget.NewButton("…", func() {
 		d := dialog.NewFileSave(func(wr fyne.URIWriteCloser, err error) {
 			if err != nil || wr == nil {
@@ -69,7 +87,7 @@ func Run() error {
 			defer wr.Close()
 			outputEntry.SetText(wr.URI().Path())
 		}, w)
-		d.SetFileName("tracks.html")
+		d.SetFileName(outputEntry.Text)
 		d.Show()
 	})
 
@@ -123,20 +141,24 @@ func Run() error {
 	})
 	generateBtn.Importance = widget.HighImportance
 
-	files := container.NewBorder(
+	// The file list is height-limited and scrollable so it can't dominate the
+	// window; everything else stacks in a single full-width column.
+	fileScroll := container.NewVScroll(fileList)
+	fileScroll.SetMinSize(fyne.NewSize(0, 130))
+
+	content := container.NewVBox(
 		widget.NewLabelWithStyle("GPX files", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		fileScroll,
 		container.NewHBox(addBtn, clearBtn),
-		nil, nil,
-		fileList,
-	)
-	options := container.NewVBox(
+		widget.NewSeparator(),
 		form,
 		markersChk, tooltipsChk, legendChk, statsChk,
+		widget.NewSeparator(),
 		generateBtn,
 	)
 
-	w.SetContent(container.NewBorder(nil, nil, nil, options, files))
-	w.Resize(fyne.NewSize(680, 460))
+	w.SetContent(container.NewVScroll(content))
+	w.Resize(fyne.NewSize(440, 560))
 	w.ShowAndRun()
 	return nil
 }

@@ -55,13 +55,22 @@ gpxmaps tracks/*.gpx -o all.html --title "Summer 2024"
 # a whole directory
 gpxmaps ./gpx-archive -o archive.html
 
+# no -o: the output name is derived from the inputs -> ride1_ride2.html
+gpxmaps ride1.gpx ride2.gpx
+
+# generate and immediately view it in your browser
+gpxmaps hike.gpx --serve            # http://localhost:8080/
+
 # thin out tooltip markers on huge tracks (keep every 20th point)
 gpxmaps bigride.gpx -o big.html --sample 20
 ```
 
+If `-o`/`--output` is omitted, the output filename is built from the input file base names
+(without extension) joined with underscores, e.g. `ride1.gpx ride2.gpx` → `ride1_ride2.html`.
+
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `-o`, `--output` | `tracks.html` | Output HTML file |
+| `-o`, `--output` | derived from inputs | Output HTML file |
 | `--title` | `GPX Tracks` | Map title / document title |
 | `--tile-url` | OSM | Leaflet tile URL template |
 | `--sample` | `0` (all) | Keep every Nth point for tooltips (polyline stays full-res) |
@@ -69,6 +78,8 @@ gpxmaps bigride.gpx -o big.html --sample 20
 | `--tooltips` | `true` | Per-point time/velocity tooltips |
 | `--legend` | `true` | Track legend |
 | `--stats` | `true` | Per-track stats in the legend |
+| `--serve` | `false` | After generating, serve the file over HTTP |
+| `--addr` | `:8080` | Listen address for `--serve` |
 | `--gui` | — | Launch the GUI instead |
 
 ### GUI

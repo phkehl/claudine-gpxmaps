@@ -6,6 +6,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,10 +21,14 @@ import (
 // error on any failure so main can set the exit code.
 func Run(args []string) error {
 	cfg := config.Default()
+	cfg.Output = "" // when left empty, derived from the input file names below
+
+	var serve bool
+	var addr string
 
 	fs := flag.NewFlagSet("gpxmaps", flag.ContinueOnError)
-	fs.StringVar(&cfg.Output, "o", cfg.Output, "output HTML file")
-	fs.StringVar(&cfg.Output, "output", cfg.Output, "output HTML file (alias of -o)")
+	fs.StringVar(&cfg.Output, "o", "", "output HTML file (default: derived from input names)")
+	fs.StringVar(&cfg.Output, "output", "", "output HTML file (alias of -o)")
 	fs.StringVar(&cfg.Title, "title", cfg.Title, "map title")
 	fs.StringVar(&cfg.TileURL, "tile-url", cfg.TileURL, "Leaflet tile URL template")
 	fs.IntVar(&cfg.Sample, "sample", cfg.Sample, "keep every Nth point for tooltips (0/1 = all)")
@@ -31,14 +36,17 @@ func Run(args []string) error {
 	fs.BoolVar(&cfg.ShowTooltips, "tooltips", cfg.ShowTooltips, "show per-point time/velocity tooltips")
 	fs.BoolVar(&cfg.ShowLegend, "legend", cfg.ShowLegend, "show track legend")
 	fs.BoolVar(&cfg.ShowStats, "stats", cfg.ShowStats, "show per-track stats in legend")
+	fs.BoolVar(&serve, "serve", false, "after generating, serve the file over HTTP")
+	fs.StringVar(&addr, "addr", ":8080", "listen address for --serve")
 	// --gui is consumed by main for mode dispatch; declare it so flag parsing
 	// of a CLI invocation that also passes inputs doesn't error.
 	fs.Bool("gui", false, "launch the GUI instead of batch mode")
 
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: gpxmaps [flags] <file-or-dir.gpx> [more...]\n\n")
-		fmt.Fprintf(fs.Output(), "Generates a single self-contained HTML map from GPX tracks.\n")
-		fmt.Fprintf(fs.Output(), "With no arguments (or --gui) the configuration GUI opens instead.\n\n")
+		fmt.Fprintf(fs.Output(), "Generates a single self-contained HTML map from GPX tracks/routes/waypoints.\n")
+		fmt.Fprintf(fs.Output(), "With no arguments (or --gui) the configuration GUI opens instead.\n")
+		fmt.Fprintf(fs.Output(), "Use --serve to view the result in a browser over HTTP.\n\n")
 		fmt.Fprintf(fs.Output(), "Flags:\n")
 		fs.PrintDefaults()
 	}
@@ -69,12 +77,36 @@ func Run(args []string) error {
 		return fmt.Errorf("no .gpx input files found")
 	}
 	cfg.Inputs = inputs
+	if cfg.Output == "" {
+		cfg.Output = config.OutputName(inputs)
+	}
 
 	if err := Generate(cfg); err != nil {
 		return err
 	}
 	fmt.Printf("Wrote %s (%d input file(s))\n", cfg.Output, len(inputs))
+
+	if serve {
+		return serveFile(addr, cfg.Output)
+	}
 	return nil
+}
+
+// serveFile serves the generated HTML over HTTP until the process is
+// interrupted. Every path returns the same file, so http://host:port/ just
+// works; map tiles are still fetched by the browser directly from the tile
+// server.
+func serveFile(addr, file string) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, file)
+	})
+	shown := addr
+	if strings.HasPrefix(addr, ":") {
+		shown = "localhost" + addr
+	}
+	fmt.Printf("Serving %s at http://%s/ (Ctrl+C to stop)\n", file, shown)
+	return http.ListenAndServe(addr, mux)
 }
 
 // Generate runs the shared pipeline: parse the configured inputs, render HTML,

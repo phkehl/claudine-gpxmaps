@@ -3,6 +3,11 @@
 // ends can never diverge in what they produce.
 package config
 
+import (
+	"path/filepath"
+	"strings"
+)
+
 // DefaultTileURL is the OpenStreetMap raster tile template used when the user
 // does not override it. Tiles are fetched by the browser at view time and are
 // the only part of the output that requires an internet connection.
@@ -74,6 +79,21 @@ func Default() Config {
 		ShowStats:       true,
 		Palette:         DefaultPalette,
 	}
+}
+
+// OutputName derives a default output filename from the input files by joining
+// their base names (without extension) with underscores, e.g.
+// ride1.gpx + ride2.gpx -> "ride1_ride2.html". Falls back to "tracks.html".
+func OutputName(inputs []string) string {
+	names := make([]string, 0, len(inputs))
+	for _, p := range inputs {
+		b := filepath.Base(p)
+		names = append(names, strings.TrimSuffix(b, filepath.Ext(b)))
+	}
+	if len(names) == 0 {
+		return "tracks.html"
+	}
+	return strings.Join(names, "_") + ".html"
 }
 
 // ColorFor returns the palette colour for the i-th track, cycling if there are
