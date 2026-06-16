@@ -25,6 +25,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ncruces/zenity"
 
 	"github.com/flip/gpxmaps/internal/cli"
 	"github.com/flip/gpxmaps/internal/config"
@@ -130,14 +131,16 @@ func Run() error {
 		d.Resize(fyne.NewSize(s.Width*0.95, s.Height*0.95))
 	}
 
-	addBtn := widget.NewButton("Add GPX…", func() {
+	// fyneAddOne is the built-in single-file picker, used as a fallback when the
+	// native dialog is unavailable (e.g. no `zenity` installed on Linux).
+	fyneAddOne := func() {
 		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err != nil || r == nil {
 				return
 			}
 			defer r.Close()
 			path := r.URI().Path()
-			lastDir = filepath.Dir(path) // remember for the next dialog
+			lastDir = filepath.Dir(path)
 			addPaths(path)
 			refreshFiles()
 		}, w)
@@ -148,6 +151,34 @@ func Run() error {
 		}
 		enlargeDialog(d)
 		d.Show()
+	}
+
+	// Add GPX… uses the OS-native dialog so you can Ctrl/Shift multi-select
+	// several files at once. It runs off the UI goroutine (zenity blocks);
+	// results are applied back on the UI thread via fyne.Do. If the native
+	// dialog isn't available, it falls back to Fyne's single-file picker.
+	addBtn := widget.NewButton("Add GPX…", func() {
+		go func() {
+			paths, err := zenity.SelectFileMultiple(
+				zenity.Title("Add GPX files"),
+				zenity.Filename(lastDir+string(os.PathSeparator)),
+				zenity.FileFilters{{Name: "GPX files", Patterns: []string{"*.gpx"}, CaseFold: true}},
+			)
+			if err == zenity.ErrCanceled {
+				return
+			}
+			if err != nil {
+				fyne.Do(fyneAddOne) // native dialog unavailable; degrade gracefully
+				return
+			}
+			fyne.Do(func() {
+				if len(paths) > 0 {
+					lastDir = filepath.Dir(paths[0])
+				}
+				addPaths(paths...)
+				refreshFiles()
+			})
+		}()
 	})
 
 	// Add folder… adds every .gpx in a chosen directory at once (Fyne's file

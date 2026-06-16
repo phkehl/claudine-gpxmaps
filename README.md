@@ -91,9 +91,14 @@ Run `gpxmaps` with no arguments, or `gpxmaps --gui`. Add GPX files, choose the o
 path and options, and click **Generate**. The GUI builds the same configuration and calls
 the same generation code as the CLI, so output is identical either way.
 
-Manage the file list with **Add GPX…** (one file), **Add folder…** (every `.gpx` in a
-directory at once), **Clear** (empties the list and resets the output name), **Sort by
-path** / **Sort by name**, and **Up** / **Down** to reorder the selected file.
+Manage the file list with **Add GPX…** (a native dialog with Ctrl/Shift multi-select),
+**Add folder…** (every `.gpx` in a directory at once), **Clear** (empties the list and
+resets the output name), **Sort by path** / **Sort by name**, and **Up** / **Down** to
+reorder the selected file.
+
+> Multi-select uses [`ncruces/zenity`](https://github.com/ncruces/zenity): native on
+> Windows; on Linux it needs the `zenity` tool installed (`sudo apt-get install zenity`),
+> and falls back to Fyne's single-file picker if it's missing.
 
 Tick **Serve over HTTP after generating** (with an optional listen address) to start a
 local server on Generate; the window then shows a clickable link to open the map in your
@@ -178,5 +183,6 @@ testdata/sample.gpx             test fixture
 ```
 
 Dependencies: [`tkrajina/gpxgo`](https://github.com/tkrajina/gpxgo) for GPX parsing and
-geo/speed maths; [`fyne.io/fyne/v2`](https://fyne.io) for the GUI (excluded in `nogui`
-builds).
+geo/speed maths; [`fyne.io/fyne/v2`](https://fyne.io) for the GUI and
+[`ncruces/zenity`](https://github.com/ncruces/zenity) for the native multi-select dialog
+(both excluded in `nogui` builds).
