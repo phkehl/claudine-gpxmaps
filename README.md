@@ -91,6 +91,10 @@ Run `gpxmaps` with no arguments, or `gpxmaps --gui`. Add GPX files, choose the o
 path and options, and click **Generate**. The GUI builds the same configuration and calls
 the same generation code as the CLI, so output is identical either way.
 
+Manage the file list with **Add GPX…** (one file), **Add folder…** (every `.gpx` in a
+directory at once), **Clear** (empties the list and resets the output name), **Sort by
+path** / **Sort by name**, and **Up** / **Down** to reorder the selected file.
+
 Tick **Serve over HTTP after generating** (with an optional listen address) to start a
 local server on Generate; the window then shows a clickable link to open the map in your
 browser. The output filename auto-fills from the input files until you set your own.

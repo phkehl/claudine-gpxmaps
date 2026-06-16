@@ -14,7 +14,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -44,6 +46,14 @@ func Run() error {
 			o.(*widget.Label).SetText(inputs[i])
 		},
 	)
+	// selected tracks the highlighted row (-1 = none) for the reorder buttons.
+	selected := -1
+	fileList.OnSelected = func(id widget.ListItemID) { selected = id }
+	fileList.OnUnselected = func(id widget.ListItemID) {
+		if selected == id {
+			selected = -1
+		}
+	}
 
 	// --- Output path (declared first so Add can auto-fill it) ------------
 	// While the user hasn't picked/typed their own name, the output field
@@ -63,6 +73,32 @@ func Run() error {
 		}
 		lastAutofill = config.OutputName(inputs)
 		outputEntry.SetText(lastAutofill)
+	}
+	// refreshFiles redraws the list and refreshes the auto-filled output name
+	// (which depends on the input set and order).
+	refreshFiles := func() {
+		fileList.Refresh()
+		setAutofill()
+	}
+	// addPaths appends paths that aren't already present, returning how many
+	// were added (so callers can report "nothing new").
+	addPaths := func(paths ...string) int {
+		added := 0
+		for _, path := range paths {
+			dup := false
+			for _, p := range inputs {
+				if p == path {
+					dup = true
+					break
+				}
+			}
+			if dup {
+				continue
+			}
+			inputs = append(inputs, path)
+			added++
+		}
+		return added
 	}
 
 	// lastDir is where the file dialogs open. It starts at the current working
@@ -102,14 +138,8 @@ func Run() error {
 			defer r.Close()
 			path := r.URI().Path()
 			lastDir = filepath.Dir(path) // remember for the next dialog
-			for _, p := range inputs {
-				if p == path {
-					return // already added; ignore duplicates
-				}
-			}
-			inputs = append(inputs, path)
-			fileList.Refresh()
-			setAutofill()
+			addPaths(path)
+			refreshFiles()
 		}, w)
 		d.SetFilter(storage.NewExtensionFileFilter([]string{".gpx"}))
 		d.SetView(dialog.ListView)
@@ -119,10 +149,86 @@ func Run() error {
 		enlargeDialog(d)
 		d.Show()
 	})
+
+	// Add folder… adds every .gpx in a chosen directory at once (Fyne's file
+	// picker can't multi-select individual files).
+	addFolderBtn := widget.NewButton("Add folder…", func() {
+		d := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
+			if err != nil || lu == nil {
+				return
+			}
+			dir := lu.Path()
+			lastDir = dir
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				dialog.ShowError(err, w)
+				return
+			}
+			var found []string
+			for _, e := range entries {
+				if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".gpx") {
+					found = append(found, filepath.Join(dir, e.Name()))
+				}
+			}
+			sort.Strings(found)
+			if addPaths(found...) == 0 {
+				dialog.ShowInformation("Add folder", "No new .gpx files found in "+dir, w)
+				return
+			}
+			refreshFiles()
+		}, w)
+		d.SetView(dialog.ListView)
+		if l := dirLister(); l != nil {
+			d.SetLocation(l)
+		}
+		enlargeDialog(d)
+		d.Show()
+	})
+
+	// Clear empties the file list and resets the (auto-filled) output name,
+	// leaving all other settings untouched.
 	clearBtn := widget.NewButton("Clear", func() {
 		inputs = nil
+		selected = -1
+		fileList.UnselectAll()
+		outputAutofill = true
+		lastAutofill = config.OutputName(inputs) // back to the default name
+		outputEntry.SetText(lastAutofill)
 		fileList.Refresh()
 	})
+
+	sortPathBtn := widget.NewButton("Sort by path", func() {
+		sort.Strings(inputs)
+		fileList.UnselectAll()
+		selected = -1
+		refreshFiles()
+	})
+	sortNameBtn := widget.NewButton("Sort by name", func() {
+		sort.SliceStable(inputs, func(i, j int) bool {
+			bi, bj := filepath.Base(inputs[i]), filepath.Base(inputs[j])
+			if bi == bj {
+				return inputs[i] < inputs[j] // tie-break on full path
+			}
+			return bi < bj
+		})
+		fileList.UnselectAll()
+		selected = -1
+		refreshFiles()
+	})
+
+	// Move the selected file up/down to reorder manually.
+	move := func(delta int) {
+		j := selected + delta
+		if selected < 0 || j < 0 || j >= len(inputs) {
+			return
+		}
+		inputs[selected], inputs[j] = inputs[j], inputs[selected]
+		selected = j
+		refreshFiles()
+		fileList.Select(j)
+	}
+	moveUpBtn := widget.NewButton("Up", func() { move(-1) })
+	moveDownBtn := widget.NewButton("Down", func() { move(1) })
 
 	browseBtn := widget.NewButton("…", func() {
 		d := dialog.NewFileSave(func(wr fyne.URIWriteCloser, err error) {
@@ -247,7 +353,8 @@ func Run() error {
 	content := container.NewVBox(
 		widget.NewLabelWithStyle("GPX files", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		fileScroll,
-		container.NewHBox(addBtn, clearBtn),
+		container.NewHBox(addBtn, addFolderBtn, clearBtn),
+		container.NewHBox(sortPathBtn, sortNameBtn, moveUpBtn, moveDownBtn),
 		widget.NewSeparator(),
 		form,
 		markersChk, tooltipsChk, legendChk, statsChk, serveChk,
