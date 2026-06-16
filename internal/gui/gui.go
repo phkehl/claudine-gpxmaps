@@ -95,6 +95,7 @@ func Run() error {
 			setAutofill()
 		}, w)
 		d.SetFilter(storage.NewExtensionFileFilter([]string{".gpx"}))
+		d.SetView(dialog.ListView)
 		if l := cwdLister(); l != nil {
 			d.SetLocation(l)
 		}
@@ -114,6 +115,7 @@ func Run() error {
 			outputEntry.SetText(wr.URI().Path())
 		}, w)
 		d.SetFileName(outputEntry.Text)
+		d.SetView(dialog.ListView)
 		if l := cwdLister(); l != nil {
 			d.SetLocation(l)
 		}
