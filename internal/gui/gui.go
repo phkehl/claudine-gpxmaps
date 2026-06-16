@@ -33,11 +33,29 @@ import (
 
 // Run launches the configuration window and blocks until it is closed.
 func Run() error {
-	a := app.New()
+	// NewWithID gives the app a stable preferences store so settings persist
+	// across runs.
+	a := app.NewWithID("com.github.phkehl.gpxmaps")
 	w := a.NewWindow("gpxmaps — GPX to HTML map")
 
 	cfg := config.Default()
+	prefs := a.Preferences()
 	var inputs []string
+
+	// prefEntry / prefCheck bind a widget to a persisted preference: the stored
+	// value (or the given default) loads on start and edits save immediately.
+	// The GPX file list and output filename are deliberately not persisted.
+	prefEntry := func(key, def string) *widget.Entry {
+		e := widget.NewEntry()
+		e.SetText(prefs.StringWithFallback(key, def))
+		e.OnChanged = func(s string) { prefs.SetString(key, s) }
+		return e
+	}
+	prefCheck := func(label, key string, def bool) *widget.Check {
+		c := widget.NewCheck(label, func(b bool) { prefs.SetBool(key, b) })
+		c.SetChecked(prefs.BoolWithFallback(key, def))
+		return c
+	}
 
 	// --- File list -------------------------------------------------------
 	fileList := widget.NewList(
@@ -306,30 +324,19 @@ func Run() error {
 		d.Show()
 	})
 
-	titleEntry := widget.NewEntry()
-	titleEntry.SetText(cfg.Title)
-
-	tileEntry := widget.NewEntry()
-	tileEntry.SetText(cfg.TileURL)
-
-	googleKeyEntry := widget.NewEntry()
+	titleEntry := prefEntry("title", cfg.Title)
+	tileEntry := prefEntry("tileURL", cfg.TileURL)
+	googleKeyEntry := prefEntry("googleKey", "")
 	googleKeyEntry.SetPlaceHolder("optional — enables Google layers (default Roadmap)")
+	sampleEntry := prefEntry("sample", "0")
 
-	sampleEntry := widget.NewEntry()
-	sampleEntry.SetText("0")
+	markersChk := prefCheck("Start/end markers", "markers", cfg.ShowMarkers)
+	tooltipsChk := prefCheck("Point tooltips (time + velocity)", "tooltips", cfg.ShowTooltips)
+	legendChk := prefCheck("Track legend", "legend", cfg.ShowLegend)
+	statsChk := prefCheck("Stats in legend", "stats", cfg.ShowStats)
 
-	markersChk := widget.NewCheck("Start/end markers", nil)
-	markersChk.SetChecked(cfg.ShowMarkers)
-	tooltipsChk := widget.NewCheck("Point tooltips (time + velocity)", nil)
-	tooltipsChk.SetChecked(cfg.ShowTooltips)
-	legendChk := widget.NewCheck("Track legend", nil)
-	legendChk.SetChecked(cfg.ShowLegend)
-	statsChk := widget.NewCheck("Stats in legend", nil)
-	statsChk.SetChecked(cfg.ShowStats)
-
-	serveChk := widget.NewCheck("Serve over HTTP after generating", nil)
-	addrEntry := widget.NewEntry()
-	addrEntry.SetText(":8080")
+	serveChk := prefCheck("Serve over HTTP after generating", "serve", false)
+	addrEntry := prefEntry("addr", ":8080")
 
 	form := widget.NewForm(
 		widget.NewFormItem("Output", container.NewBorder(nil, nil, nil, browseBtn, outputEntry)),
